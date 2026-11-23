@@ -1,2 +1,10 @@
 on1xfile 1
-source "foundation.on1x"
+interface "interface"
+source "bloomscript"
+source "dublin"
+source "rubicon"
+source "telemachaid"
+source "introibo"
+source "weblet"
+source "dedalus"
+source "platform" 
