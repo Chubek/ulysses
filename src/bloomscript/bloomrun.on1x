@@ -1,0 +1,13 @@
+import "compiler.on1x";
+
+fn main() -> i64
+{
+  let result = bloom_run(io_stdin());
+  if !result["ok"]
+  {
+    io_stderr("bloomrun: invalid or over-budget bytecode\n");
+    return 1;
+  }
+  io_stdout(sx_text(result["output"]));
+  return 0;
+}

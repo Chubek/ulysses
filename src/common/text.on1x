@@ -1,0 +1,44 @@
+fn find_byte(text: string, byte: i64, start: i64) -> i64
+{
+  for i in start .. text_len(text)
+  {
+    if text_byte(text, i) == byte { return i; }
+  }
+  return -1;
+}
+
+# The wire uses canonical nonnegative decimal integers bounded to 31 bits.
+fn wire_number(text: string, start: i64, end: i64) -> i64
+{
+  if start < 0 || end > text_len(text) || start >= end || end - start > 10
+     || (end - start > 1 && text_byte(text, start) == 48)
+  {
+    return -1;
+  }
+  var value = 0;
+  for i in start .. end
+  {
+    let digit = text_byte(text, i) - 48;
+    if digit < 0 || digit > 9 || value > (2147483647 - digit) / 10
+    {
+      return -1;
+    }
+    value = value * 10 + digit;
+  }
+  return value;
+}
+
+fn wire_decimal(value: i64) -> string
+{
+  let digits = "0123456789";
+  var left = value;
+  var result = "";
+  loop
+  {
+    let digit = left % 10;
+    result = text_concat(text_slice(digits, digit, digit + 1), result);
+    left = left / 10;
+    if left == 0 { return result; }
+  }
+  return result;
+}

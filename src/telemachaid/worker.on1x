@@ -1,0 +1,37 @@
+import "session.on1x";
+import "../erin/weblet.on1x";
+import "../bloomscript/compiler.on1x";
+
+extern fn uly_guest_read() -> string;
+extern fn uly_guest_write(wire: string) -> bool;
+
+fn telemachaid_reply(msg: RubiconMessage, bytecode: string) -> RubiconMessage
+{
+  let generation = msg["generation"];
+  let request = msg["request"];
+  let kind = msg["kind"];
+  if kind == 1 { return rubicon_message(4, generation, request, "ready"); }
+  if kind == 2 { return rubicon_message(4, generation, request, erin_hello()); }
+  let bloom = bloom_run(bytecode);
+  if bloom["ok"] { return rubicon_message(4, generation, request, sx_text(bloom["output"])); }
+  return rubicon_message(5, generation, request, "Bloomscript execution failed\n");
+}
+
+fn main() -> i64
+{
+  let compiled = bloom_compile("text Hello from \ntext Bloomscript\nconcat\nreturn\n");
+  if !compiled["ok"] { return 1; }
+  let bytecode = sx_text(compiled["output"]);
+  var session = telemachaid_session(0, 0);
+  loop
+  {
+    let wire = uly_guest_read();
+    if wire == "" { return 0; }
+    let msg = rubicon_decode(wire);
+    if !telemachaid_accept(session, msg) { return 1; }
+    let reply = rubicon_encode(telemachaid_reply(msg, bytecode));
+    if reply == "" || !uly_guest_write(reply) { return 1; }
+    session = telemachaid_session(msg["generation"], msg["request"]);
+  }
+  return 0;
+}

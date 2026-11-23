@@ -424,6 +424,7 @@ figure/
 *.xasy
 *.gs
 *.m
+!On1xfile.m
 *.3d
 *.contour
 *.html

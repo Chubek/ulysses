@@ -1,0 +1,57 @@
+import "../common/text.on1x";
+
+# A transport record carries exactly one message. Payloads are NUL-free.
+record RubiconMessage
+{
+  kind: i64, generation: i64, request: i64, payload: sexpr
+}
+
+fn rubicon_message(kind: i64, generation: i64, request: i64, payload: string) -> RubiconMessage
+{
+  return record < RubiconMessage > {kind: kind, generation: generation, request: request, payload: sx_string(payload)};
+}
+
+fn rubicon_valid(kind: i64, generation: i64, request: i64, payload: string) -> bool
+{
+  return kind >= 1 && kind <= 5 && generation > 0 && generation <= 2147483647
+      && request > 0 && request <= 2147483647 && text_len(payload) <= 4096
+      && ((kind != 1 && kind != 2 && kind != 3) || payload == "");
+}
+
+fn rubicon_encode(msg: RubiconMessage) -> string
+{
+  let kind = msg["kind"];
+  let generation = msg["generation"];
+  let request = msg["request"];
+  let payload = sx_text(msg["payload"]);
+  if !rubicon_valid(kind, generation, request, payload) { return ""; }
+  let start = text_concat("U1\n", wire_decimal(kind));
+  let middle = text_concat(text_concat("\n", wire_decimal(generation)), "\n");
+  let end = text_concat(text_concat(wire_decimal(request), "\n"), payload);
+  return text_concat(text_concat(start, middle), end);
+}
+
+fn rubicon_decode(wire: string) -> RubiconMessage
+{
+  let invalid = rubicon_message(0, 0, 0, "");
+  let size = text_len(wire);
+  if size < 9 || size > 4123 || text_slice(wire, 0, 3) != "U1\n" { return invalid; }
+  let a = find_byte(wire, 10, 3);
+  if a < 0 { return invalid; }
+  let b = find_byte(wire, 10, a + 1);
+  if b < 0 { return invalid; }
+  let c = find_byte(wire, 10, b + 1);
+  if c < 0 { return invalid; }
+  let kind = wire_number(wire, 3, a);
+  let generation = wire_number(wire, a + 1, b);
+  let request = wire_number(wire, b + 1, c);
+  let payload = text_slice(wire, c + 1, size);
+  if !rubicon_valid(kind, generation, request, payload) { return invalid; }
+  return rubicon_message(kind, generation, request, payload);
+}
+
+fn rubicon_reply_matches(reply: RubiconMessage, generation: i64, request: i64) -> bool
+{
+  return (reply["kind"] == 4 || reply["kind"] == 5)
+      && reply["generation"] == generation && reply["request"] == request;
+}

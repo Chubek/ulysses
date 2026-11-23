@@ -1,0 +1,13 @@
+import "compiler.on1x";
+
+fn main() -> i64
+{
+  let compiled = bloom_compile(io_stdin());
+  if !compiled["ok"]
+  {
+    io_stderr("bloomc: invalid or over-budget program\n");
+    return 1;
+  }
+  io_stdout(sx_text(compiled["output"]));
+  return 0;
+}

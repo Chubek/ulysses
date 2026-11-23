@@ -1,0 +1,54 @@
+# Single-worker policy. The clock and process handle are supplied by the host.
+record IntroiboLease
+{
+  generation: i64, retry_at: i64, failures: i64, expires_at: i64
+}
+
+fn introibo_lease(generation: i64, retry_at: i64, failures: i64, expires_at: i64) -> IntroiboLease
+{
+  return record < IntroiboLease > {
+    generation: generation, retry_at: retry_at, failures: failures, expires_at: expires_at
+  };
+}
+
+fn introibo_should_start(lease: IntroiboLease, now: i64) -> bool
+{
+  return lease["expires_at"] == 0 && now >= lease["retry_at"] && lease["generation"] < 2147483647;
+}
+
+fn introibo_started(lease: IntroiboLease) -> IntroiboLease
+{
+  return introibo_lease(lease["generation"] + 1, 0, lease["failures"], 0);
+}
+
+fn introibo_is_ready(lease: IntroiboLease, now: i64) -> bool
+{
+  return lease["expires_at"] > now;
+}
+
+fn introibo_inactive(lease: IntroiboLease) -> IntroiboLease
+{
+  return introibo_lease(lease["generation"], 0, lease["failures"], 0);
+}
+
+fn introibo_ready(lease: IntroiboLease, now: i64) -> IntroiboLease
+{
+  return introibo_lease(lease["generation"], 0, lease["failures"], now + 30000);
+}
+
+fn introibo_healthy(lease: IntroiboLease, now: i64) -> IntroiboLease
+{
+  return introibo_lease(lease["generation"], 0, 0, now + 30000);
+}
+
+fn introibo_failed(lease: IntroiboLease, now: i64) -> IntroiboLease
+{
+  let failures = lease["failures"];
+  var delay = 100;
+  for i in 0 .. failures { delay = delay * 2; }
+  if failures < 5
+  {
+    return introibo_lease(lease["generation"], now + delay, failures + 1, 0);
+  }
+  return introibo_lease(lease["generation"], now + delay, failures, 0);
+}

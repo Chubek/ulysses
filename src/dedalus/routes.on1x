@@ -1,0 +1,26 @@
+import "../common/text.on1x";
+
+# Trusted built-in handler selection. Status 0 means dispatch to the worker.
+record DedalusRoute {status: i64, worker_kind: i64, body: sexpr}
+
+fn dedalus_route(status: i64, kind: i64, body: string) -> DedalusRoute
+{
+  return record < DedalusRoute > {status: status, worker_kind: kind, body: sx_string(body)};
+}
+
+fn dedalus_select(method: string, target: string) -> DedalusRoute
+{
+  if method != "GET" { return dedalus_route(405, 0, "Method Not Allowed\n"); }
+  if text_len(target) == 0 || text_byte(target, 0) != 47 || find_byte(target, 35, 0) >= 0
+  {
+    return dedalus_route(400, 0, "Bad Request\n");
+  }
+  let query = find_byte(target, 63, 0);
+  var path = target;
+  if query >= 0 { path = text_slice(target, 0, query); }
+  if path == "/" { return dedalus_route(200, 0, "Ulysses\n"); }
+  if path == "/health" { return dedalus_route(200, 0, "ok\n"); }
+  if path == "/api/hello" { return dedalus_route(0, 2, ""); }
+  if path == "/api/bloom" { return dedalus_route(0, 3, ""); }
+  return dedalus_route(404, 0, "Not Found\n");
+}

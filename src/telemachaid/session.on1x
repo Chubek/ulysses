@@ -1,0 +1,16 @@
+import "../rubicon/message.on1x";
+
+record GuestSession {generation: i64, last_request: i64}
+
+fn telemachaid_session(generation: i64, last_request: i64) -> GuestSession
+{
+  return record < GuestSession > {generation: generation, last_request: last_request};
+}
+
+fn telemachaid_accept(session: GuestSession, msg: RubiconMessage) -> bool
+{
+  let generation = session["generation"];
+  if generation == 0 { return msg["kind"] == 1 && msg["request"] == 1; }
+  return msg["generation"] == generation && msg["request"] > session["last_request"]
+      && (msg["kind"] == 2 || msg["kind"] == 3);
+}

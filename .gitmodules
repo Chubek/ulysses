@@ -1,0 +1,3 @@
+[submodule "third_party/mulib"]
+	path = third_party/mulib
+	url = https://github.com/Chubek/mulib.git

@@ -1,0 +1,88 @@
+import "../common/text.on1x";
+
+# The source language is a bounded stack program over strings. Opcodes in
+# B1 bytecode are T<literal>, C (concat), and R (return).
+fn bloom_opcode(line: string, source: bool) -> string
+{
+  if !source { return line; }
+  if line == "concat" { return "C"; }
+  if line == "return" { return "R"; }
+  if text_len(line) >= 5 && text_slice(line, 0, 5) == "text "
+  {
+    return text_concat("T", text_slice(line, 5, text_len(line)));
+  }
+  return "";
+}
+
+record BloomResult {ok: bool, output: sexpr}
+
+fn bloom_result(ok: bool, output: string) -> BloomResult
+{
+  return record < BloomResult > {ok: ok, output: sx_string(output)};
+}
+
+fn bloom_process(input: string, source: bool) -> BloomResult
+{
+  let bad = bloom_result(false, "");
+  let length = text_len(input);
+  if length > 4096 || length == 0 { return bad; }
+  var pos = 0;
+  if !source
+  {
+    if length < 3 || text_slice(input, 0, 3) != "B1\n" { return bad; }
+    pos = 3;
+  }
+  let program = buffer_new();
+  if source { buffer_append(program, "B1\n"); }
+  var stack = sx_nil();
+  var depth = 0;
+  var instructions = 0;
+  while pos < length
+  {
+    instructions = instructions + 1;
+    if instructions > 64 { return bad; }
+    let end = find_byte(input, 10, pos);
+    if end < 0 { return bad; }
+    let op = bloom_opcode(text_slice(input, pos, end), source);
+    if text_len(op) == 0 { return bad; }
+    pos = end + 1;
+    if source
+    {
+      buffer_append(program, op);
+      buffer_append(program, "\n");
+    }
+    if op == "R"
+    {
+      if depth != 1 || pos != length { return bad; }
+      if source { return bloom_result(true, buffer_text(program)); }
+      return bloom_result(true, sx_text(sx_head(stack)));
+    }
+    if op == "C"
+    {
+      if depth < 2 { return bad; }
+      let right = sx_text(sx_head(stack));
+      let rest = sx_tail(stack);
+      let left = sx_text(sx_head(rest));
+      if text_len(left) + text_len(right) > 4096 { return bad; }
+      stack = sx_cons(sx_string(text_concat(left, right)), sx_tail(rest));
+      depth = depth - 1;
+    }
+    else
+    {
+      if text_byte(op, 0) != 84 || depth == 8 { return bad; }
+      stack = sx_cons(sx_string(text_slice(op, 1, text_len(op))), stack);
+      depth = depth + 1;
+    }
+  }
+  return bad;
+}
+
+fn bloom_compile(source: string) -> BloomResult
+{
+  return bloom_process(source, true);
+}
+
+fn bloom_run(bytecode: string) -> BloomResult
+{
+  return bloom_process(bytecode, false);
+}

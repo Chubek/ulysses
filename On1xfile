@@ -1,0 +1,7 @@
+on1xfile 1
+kind complex
+name "ulysses"
+directory "src"
+target "ulysses-check" "src/foundation.on1x"
+target "bloomc" "src/bloomscript/bloomc.on1x"
+target "bloomrun" "src/bloomscript/bloomrun.on1x"

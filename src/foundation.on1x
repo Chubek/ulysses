@@ -1,0 +1,48 @@
+import "rubicon/message.on1x";
+import "introibo/lease.on1x";
+import "telemachaid/session.on1x";
+import "bloomscript/compiler.on1x";
+import "dedalus/routes.on1x";
+import "erin/weblet.on1x";
+
+fn main() -> i64
+{
+  let encoded = rubicon_encode(rubicon_message(4, 11, 2147483647, "x\ny\n"));
+  let message = rubicon_decode(encoded);
+  assert(rubicon_reply_matches(message, 11, 2147483647));
+  assert(sx_text(message["payload"]) == "x\ny\n");
+  assert(rubicon_decode("U1\n4\n1\n2147483648\n")["kind"] == 0);
+  assert(rubicon_decode("U1\n4\n01\n1\n")["kind"] == 0);
+  assert(rubicon_decode("U1\n2\n1\n2\nx")["kind"] == 0);
+  assert(telemachaid_accept(telemachaid_session(0, 0), rubicon_message(1, 11, 1, "")));
+  assert(!telemachaid_accept(telemachaid_session(0, 0), rubicon_message(2, 11, 1, "")));
+  assert(!telemachaid_accept(telemachaid_session(11, 2), rubicon_message(2, 11, 2, "")));
+  assert(!telemachaid_accept(telemachaid_session(11, 2), rubicon_message(2, 10, 3, "")));
+  assert(telemachaid_accept(telemachaid_session(11, 2), rubicon_message(2, 11, 3, "")));
+  assert(dedalus_select("GET", "/api/hello?q=x")["worker_kind"] == 2);
+  assert(dedalus_select("GET", "/api%2Fhello")["status"] == 404);
+  assert(dedalus_select("POST", "/api/hello")["status"] == 405);
+  assert(erin_hello() == "Hello from Erin\n");
+  let compiled = bloom_compile("text Hello\ntext  world\nconcat\nreturn\n");
+  assert(compiled["ok"]);
+  assert(sx_text(compiled["output"]) == "B1\nTHello\nT world\nC\nR\n");
+  assert(sx_text(bloom_run(sx_text(compiled["output"]))["output"]) == "Hello world");
+  assert(!bloom_run("B1\nC\nR\n")["ok"]);
+  assert(!bloom_run("B1\nTgood\nR\nTbad\n")["ok"]);
+  assert(!bloom_compile("text no return\n")["ok"]);
+  let initial = introibo_lease(0, 0, 0, 0);
+  assert(introibo_should_start(initial, 0));
+  let failed = introibo_failed(introibo_started(initial), 20);
+  assert(!introibo_should_start(failed, 119));
+  assert(introibo_should_start(failed, 120));
+  let ready = introibo_ready(introibo_started(failed), 120);
+  assert(ready["generation"] == 2);
+  assert(!introibo_should_start(ready, 120));
+  assert(introibo_is_ready(ready, 30119));
+  assert(!introibo_is_ready(ready, 30120));
+  assert(introibo_should_start(introibo_inactive(ready), 30120));
+  let renewed = introibo_healthy(ready, 200);
+  assert(renewed["failures"] == 0 && renewed["expires_at"] == 30200);
+  println("Ulysses foundation checks passed");
+  return 0;
+}

@@ -1,0 +1,98 @@
+import "../dedalus/routes.on1x";
+import "../rubicon/message.on1x";
+import "../introibo/lease.on1x";
+
+extern fn uly_http_open() -> i64;
+extern fn uly_http_accept() -> i64;
+extern fn uly_http_method() -> string;
+extern fn uly_http_target() -> string;
+extern fn uly_http_reply(status: i64, body: string);
+extern fn uly_http_close();
+extern fn uly_worker_start() -> bool;
+extern fn uly_worker_stop();
+extern fn uly_worker_exchange(wire: string) -> string;
+extern fn uly_now_ms() -> i64;
+extern fn uly_connection_limit() -> i64;
+
+fn dublin_start(lease: IntroiboLease) -> IntroiboLease
+{
+  if !introibo_should_start(lease, uly_now_ms()) { return lease; }
+  let starting = introibo_started(lease);
+  if uly_worker_start()
+  {
+    let generation = starting["generation"];
+    let hello = rubicon_encode(rubicon_message(1, generation, 1, ""));
+    let reply = rubicon_decode(uly_worker_exchange(hello));
+    if rubicon_reply_matches(reply, generation, 1) && reply["kind"] == 4
+       && sx_text(reply["payload"]) == "ready"
+    {
+      return introibo_ready(starting, uly_now_ms());
+    }
+    uly_worker_stop();
+  }
+  return introibo_failed(starting, uly_now_ms());
+}
+
+fn dublin_dispatch(lease: IntroiboLease, kind: i64, request: i64) -> IntroiboLease
+{
+  var current = lease;
+  if current["expires_at"] != 0 && !introibo_is_ready(current, uly_now_ms())
+  {
+    uly_worker_stop();
+    current = introibo_inactive(current);
+  }
+  let ready = dublin_start(current);
+  if !introibo_is_ready(ready, uly_now_ms())
+  {
+    uly_http_reply(503, "Worker Unavailable\n");
+    return ready;
+  }
+  let generation = ready["generation"];
+  let wire = rubicon_encode(rubicon_message(kind, generation, request, ""));
+  let reply = rubicon_decode(uly_worker_exchange(wire));
+  if !rubicon_reply_matches(reply, generation, request)
+  {
+    uly_worker_stop();
+    uly_http_reply(502, "Worker Transport Failed\n");
+    return introibo_failed(ready, uly_now_ms());
+  }
+  if reply["kind"] == 5 { uly_http_reply(502, "Weblet Failed\n"); }
+  else { uly_http_reply(200, sx_text(reply["payload"])); }
+  return introibo_healthy(ready, uly_now_ms());
+}
+
+fn main() -> i64
+{
+  let limit = uly_connection_limit();
+  var port = -1;
+  if limit > 0 { port = uly_http_open(); }
+  if port < 0
+  {
+    io_stderr("dublind: cannot start loopback listener or invalid options\n");
+    return 1;
+  }
+  io_stdout(text_concat(text_concat("dublind listening on 127.0.0.1:", wire_decimal(port)), "\n"));
+  var lease = introibo_lease(0, 0, 0, 0);
+  var exit_status = 0;
+  for connection in 0 .. limit
+  {
+    let status = uly_http_accept();
+    if status < 0
+    {
+      io_stderr("dublind: accept failed\n");
+      exit_status = 1;
+      break;
+    }
+    if status != 1 { uly_http_reply(status, "Request Rejected\n"); }
+    else
+    {
+      let route = dedalus_select(uly_http_method(), uly_http_target());
+      let code = route["status"];
+      if code == 0 { lease = dublin_dispatch(lease, route["worker_kind"], connection + 2); }
+      else { uly_http_reply(code, sx_text(route["body"])); }
+    }
+  }
+  uly_worker_stop();
+  uly_http_close();
+  return exit_status;
+}

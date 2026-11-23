@@ -1,0 +1,5 @@
+# Native guest entry point. The worker owns the session and supplies identity.
+fn erin_hello() -> string
+{
+  return "Hello from Erin\n";
+}
