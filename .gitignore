@@ -2,7 +2,6 @@
 AUROCKS_STRPOOL
 
 # Agent Residue
-AGENTS.md
 .agents
 .aws
 .gapcode
